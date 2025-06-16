@@ -1,0 +1,33 @@
+# Ignore Streamlit secrets file
+.streamlit/secrets.toml
+
+# Ignore common Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Ignore virtual environment
+.venv/
+venv/
+ENV/
+env/
+*.env
+
+# Ignore IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Ignore testing artifacts
+.pytest_cache/
+.coverage
+htmlcov/
