@@ -51,7 +51,7 @@ def get_db_engine():
         # Default to a common, modern ODBC driver for SQL Server if not specified.
         # This improves out-of-the-box experience for many users.
         query_params["driver"] = "ODBC Driver 17 for SQL Server"
-        # st.info(f"Using default ODBC driver: '{query_params['driver']}'. Specify 'DRIVER' in secrets.toml if you need a different one.")
+        st.info(f"Using default ODBC driver: '{query_params['driver']}'. Specify 'DRIVER' in secrets.toml if you need a different one.")
 
 
     try:

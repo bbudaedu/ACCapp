@@ -1,6 +1,7 @@
 # app/core/llm_config.py
 import streamlit as st
 from pandasai.llm import GooglePalm # Assuming Gemini is accessed via GooglePalm or a similar class
+import toml
 
 def get_llm():
     """
@@ -55,20 +56,45 @@ if __name__ == "__main__":
     # Note: This test won't work without a running Streamlit app context for st.secrets
     # or if secrets.toml is not set up correctly.
     print("Attempting to configure LLM (direct script run)...")
-    
-    # Mock st.secrets for direct script testing if needed, or rely on actual file for manual test.
-    # For automated testing, one might mock st.secrets.
-    # For now, this will try to read the actual secrets file if run in an environment where Streamlit context is not available.
-    # However, st.secrets is designed to work within a Streamlit application run.
-    
-    # A more robust way to test outside Streamlit would be to load secrets manually here:
-    # import toml
-    # try:
-    #     with open(".streamlit/secrets.toml", "r") as f:
-    #         secrets_content = toml.load(f)
-    #     st.secrets = secrets_content # This is a mock assignment
-    # except Exception as e:
-    #     print(f"Could not load secrets.toml for local testing: {e}")
+
+    # --- Mocking st.secrets for local testing ---
+    # This is a simplified mock. In a real test suite, you might use unittest.mock.
+    class MockSecrets(dict):
+        def __init__(self, *args, **kwargs):
+            super(MockSecrets, self).__init__(*args, **kwargs)
+            self.__dict__ = self # Allows attribute-style access if your code uses it
+
+        def __getitem__(self, key):
+            # Allow dict-style access (e.g. st.secrets["google"])
+            return super().__getitem__(key)
+
+        def get(self, key, default=None):
+            # Ensure get method behaves as expected for nested access in get_llm
+            return super().get(key, default)
+
+    try:
+        # import toml # Already imported at the top
+        with open(".streamlit/secrets.toml", "r") as f:
+            secrets_data = toml.load(f)
+        st.secrets = MockSecrets(secrets_data) # Replace st.secrets with our mock
+        print("Mocked st.secrets with data from .streamlit/secrets.toml")
+    except FileNotFoundError:
+        print("Local .streamlit/secrets.toml not found. Mocking with placeholder data for testing structure.")
+        # Provide minimal structure for get_llm to run without erroring on st.secrets access
+        st.secrets = MockSecrets({
+            "google": {
+                "GOOGLE_API_KEY": "YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE" # Placeholder
+            }
+        })
+    except Exception as e:
+        print(f"Error loading/mocking secrets.toml for local testing: {e}")
+        # Provide a basic mock structure even in case of other errors during toml parsing
+        st.secrets = MockSecrets({
+            "google": {
+                "GOOGLE_API_KEY": "YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE_ERROR_CASE"
+            }
+        })
+    # --- End Mocking st.secrets ---
 
     llm_instance = get_llm()
     if llm_instance:
