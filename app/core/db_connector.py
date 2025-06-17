@@ -1,144 +1,84 @@
 # app/core/db_connector.py
-import streamlit as st
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import URL
-import pyodbc # Ensure pyodbc is explicitly imported if not automatically handled by sqlalchemy with mssql+pyodbc
 
+import streamlit as st
+from sqlalchemy import create_engine, text  # <--- 修正後的匯入
+import urllib
+
+@st.cache_resource
 def get_db_engine():
     """
-    Loads SQL Server connection details from Streamlit secrets
-    and returns a SQLAlchemy engine.
+    建立一個用於 SQL Server 的 SQLAlchemy 引擎。
+    此函數會根據 secrets.toml 文件中是否提供了使用者名稱，
+    智慧地在「SQL Server 驗證」和「Windows 驗證」之間切換。
+    它還根據您的螢幕截圖包含了加密設定。
     """
     try:
-        db_secrets = st.secrets["database"]
-        # db_type = db_secrets.get("DB_TYPE", "sqlserver") # DB_TYPE is informational for now
-        server = db_secrets["SERVER"]
-        database = db_secrets["DATABASE"]
-        username = db_secrets["USERNAME"]
-        password = db_secrets["PASSWORD"]
-        driver = db_secrets.get("DRIVER") # Optional
+        # 從 Streamlit secrets 載入憑證
+        db_config = st.secrets["database"]
+        server = db_config.get("SERVER")
+        database = db_config.get("DATABASE")
+        username = db_config.get("USERNAME")
+        password = db_config.get("PASSWORD")
 
-    except KeyError as e:
-        st.error(f"Missing database configuration in .streamlit/secrets.toml under [database]: {e}. Required keys: SERVER, DATABASE, USERNAME, PASSWORD.")
+        # 基本驗證，確保必要欄位存在
+        if not server or not database:
+            st.error("資料庫設定錯誤: `SERVER` 和 `DATABASE` 欄位在 .streamlit/secrets.toml 文件中是必需的。")
+            st.info("請參考您的 SQL Server Management Studio 連線資訊進行填寫。")
+            return None
+            
+        # 這是最常見的 SQL Server ODBC 驅動程式。請確保它已安裝在您的系統上。
+        driver = "{ODBC Driver 17 for SQL Server}"
+        
+        conn_str_params = {
+            "DRIVER": driver,
+            "SERVER": server,
+            "DATABASE": database,
+            "Encrypt": "yes",  # 根據您的「Encrypt: Mandatory」設定
+            "TrustServerCertificate": "yes", # 根據您的「Trust Server Certificate」設定
+        }
+
+        # --- 智慧選擇驗證方法 ---
+        if username:
+            # 如果提供了 USERNAME，則使用 SQL Server 驗證
+            conn_str_params["UID"] = username
+            conn_str_params["PWD"] = password
+            auth_method = "SQL Server 驗證"
+        else:
+            # 如果 USERNAME 為空，則使用 Windows 驗證
+            conn_str_params["Trusted_Connection"] = "yes"
+            auth_method = "Windows 驗證"
+
+        # 組裝連線字串參數
+        params_list = [f"{key}={value}" for key, value in conn_str_params.items()]
+        params_str = ";".join(params_list)
+        
+        # 為連線 URL 引用參數
+        quoted_params = urllib.parse.quote_plus(params_str)
+        
+        # 建立最終的 SQLAlchemy 連線字串
+        conn_url = f"mssql+pyodbc:///?odbc_connect={quoted_params}"
+        
+        st.info(f"正在嘗試使用 `{auth_method}` 連接資料庫...") # 告知使用者使用了哪種方法
+        
+        # 建立引擎。此引擎將被 @st.cache_resource 快取
+        engine = create_engine(conn_url)
+
+        # 透過執行一個簡單的查詢來測試連線，以提供即時回饋
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1")) # <--- text() 函數現在已經被定義了
+        
+        return engine
+
+    except Exception as e:
+        # 如果任何步驟失敗，提供詳細的錯誤訊息
+        st.error(f"資料庫連線失敗: {e}")
         st.info("""
-        Example .streamlit/secrets.toml:
-        ```toml
-        [database]
-        SERVER = "YOUR_SQL_SERVER_NAME_HERE"
-        DATABASE = "YOUR_DATABASE_NAME_HERE"
-        USERNAME = "YOUR_DB_USERNAME_HERE"
-        PASSWORD = "YOUR_DB_PASSWORD_HERE"
-        # Optional: DRIVER = "ODBC Driver 17 for SQL Server"
-        ```
+        **請檢查以下幾點:**
+        1.  確認 `.streamlit/secrets.toml` 中的 `SERVER` 和 `DATABASE` 是否完全正確。
+        2.  **如果您使用 Windows 驗證, 請確保 `USERNAME` 和 `PASSWORD` 為空。**
+        3.  如果您使用 SQL Server 驗證, 請確保 `USERNAME` 和 `PASSWORD` 正確。
+        4.  執行此應用程式的電腦**網路**是否可以連上資料庫伺服器。
+        5.  伺服器上的**防火牆**是否已允許此連線。
+        6.  系統的 **ODBC Driver 17 for SQL Server** 是否已正確安裝。
         """)
         return None
-    except FileNotFoundError: # Should be caught by st.secrets if file is missing.
-        st.error(".streamlit/secrets.toml file not found. Please ensure it exists and is correctly named.")
-        return None
-    except Exception as e: # Catch any other st.secrets access issues
-        st.error(f"Error accessing Streamlit secrets: {e}")
-        return None
-
-    if any(val.startswith("YOUR_") for val in [server, database, username, password]) or \
-       any(not val or not val.strip() for val in [server, database, username, password]):
-        st.error("Please replace placeholder database credentials in .streamlit/secrets.toml with your actual SQL Server details. All fields (SERVER, DATABASE, USERNAME, PASSWORD) are required.")
-        return None
-
-    query_params = {}
-    if driver:
-        query_params["driver"] = driver.strip()
-    else:
-        # Default to a common, modern ODBC driver for SQL Server if not specified.
-        # This improves out-of-the-box experience for many users.
-        query_params["driver"] = "ODBC Driver 17 for SQL Server"
-        # st.info(f"Using default ODBC driver: '{query_params['driver']}'. Specify 'DRIVER' in secrets.toml if you need a different one.")
-
-
-    try:
-        # Construct the URL using sqlalchemy.engine.URL.create
-        # This handles special characters in username/password if any (though they should be URL-encoded if passed directly in a string)
-        url_object = URL.create(
-            "mssql+pyodbc",
-            username=username,
-            password=password,
-            host=server,
-            database=database,
-            query=query_params
-        )
-        
-        # Create engine. `echo=False` is default, can be True for debugging.
-        # `pool_pre_ping` checks connection validity from pool.
-        engine = create_engine(url_object, pool_pre_ping=True)
-        
-        # Test connection by trying to execute a simple query
-        with engine.connect() as connection:
-            connection.execute(text("SELECT 1")) # Basic query to check connectivity
-            
-        # st.success("Database engine created successfully and connection verified.") # Can be verbose for user
-        return engine
-        
-    except pyodbc.Error as e:
-        # Specific pyodbc errors can give more insight
-        st.error(f"pyODBC Error connecting to database: {e}")
-        st.error(f"Connection details used: Server='{server}', Database='{database}', Username='{username}', Driver='{query_params['driver']}'")
-        st.info("Ensure SQL Server is running, accessible, and credentials/driver are correct. Check firewall settings. If using a non-standard port, include it in the SERVER (e.g., 'your_server,1433').")
-        return None
-    except Exception as e:
-        # Catch other SQLAlchemy or general errors
-        st.error(f"Failed to create database engine or connect: {e}")
-        st.error(f"Connection details used: Server='{server}', Database='{database}', Username='{username}', Driver='{query_params['driver']}'")
-        return None
-
-if __name__ == "__main__":
-    # This part is for testing the function directly.
-    # Note: `st.secrets` is designed for use within a running Streamlit application.
-    # For direct script execution, you would typically mock `st.secrets` or manually load
-    # the .streamlit/secrets.toml file using a library like `toml`.
-    
-    print("Attempting to create database engine (direct script run)...")
-    
-    # --- Mocking st.secrets for local testing ---
-    # This is a simplified mock. In a real test suite, you might use unittest.mock.
-    class MockSecrets(dict):
-        def __init__(self, *args, **kwargs):
-            super(MockSecrets, self).__init__(*args, **kwargs)
-            self.__dict__ = self # Allows attribute-style access if your code uses it (e.g. st.secrets.database)
-
-        def __getitem__(self, key):
-            # Allow dict-style access (e.g. st.secrets["database"])
-            return super().__getitem__(key)
-
-    try:
-        import toml
-        with open(".streamlit/secrets.toml", "r") as f:
-            secrets_data = toml.load(f)
-        st.secrets = MockSecrets(secrets_data) # Replace st.secrets with our mock
-        print("Mocked st.secrets with data from .streamlit/secrets.toml")
-    except FileNotFoundError:
-        print("Local .streamlit/secrets.toml not found. Mocking with placeholder data for testing structure.")
-        # Provide minimal structure for the function to run without erroring on st.secrets access
-        st.secrets = MockSecrets({
-            "database": {
-                "SERVER": "YOUR_SQL_SERVER_NAME_HERE", # Placeholder
-                "DATABASE": "YOUR_DATABASE_NAME_HERE", # Placeholder
-                "USERNAME": "YOUR_DB_USERNAME_HERE", # Placeholder
-                "PASSWORD": "YOUR_DB_PASSWORD_HERE", # Placeholder
-                "DRIVER": "ODBC Driver 17 for SQL Server"
-            }
-        })
-    except Exception as e:
-        print(f"Error loading/mocking secrets.toml for local testing: {e}")
-        st.secrets = MockSecrets({}) # Empty mock to prevent AttributeError
-
-    # --- End Mocking st.secrets ---
-
-    engine = get_db_engine()
-    if engine:
-        print(f"Database engine creation attempt finished. Engine object: {engine}")
-        print("To verify, check for error messages above if actual connection was attempted with placeholders.")
-    else:
-        print("Database engine creation failed. See error messages above for details.")
-        print("If using placeholder credentials (YOUR_... values), failure is expected.")
-        print("Ensure you have actual credentials in .streamlit/secrets.toml for a real test.")
-
-```
