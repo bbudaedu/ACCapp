@@ -1,0 +1,13 @@
+name: accapp_stable_env
+channels:
+  - defaults
+  - conda-forge # often good for streamlit and other packages
+dependencies:
+  - python=3.9 # Specify a reasonable Python version
+  - pip
+  - pandas=1.5.3
+  - numpy=1.24.4
+  - streamlit=1.28.2
+  - sqlalchemy
+  - pip:
+    - pandasai
