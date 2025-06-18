@@ -36,7 +36,7 @@ def fetch_dropdown_data(query, params=None):
 acc_data = fetch_dropdown_data("SELECT AT_NO, AT_NAME FROM AACNT ORDER BY AT_NO;")
 acc_options = {row['AT_NO']: f"{row['AT_NO']} - {row['AT_NAME']}" for index, row in acc_data.iterrows()} if not acc_data.empty else {}
 
-emp_data = fetch_dropdown_data("SELECT EM_USERID, EM_NAME FROM PEMPLOYE WHERE EM_JOBSTS = 1 ORDER BY EM_USERID;") # Assuming EM_JOBSTS=1 for active employees
+emp_data = fetch_dropdown_data("SELECT EM_USERID, EM_NAME FROM PEMPLOYE ORDER BY EM_USERID;") # Removed WHERE EM_JOBSTS = 1
 emp_options = {row['EM_USERID']: f"{row['EM_USERID']} - {row['EM_NAME']}" for index, row in emp_data.iterrows()} if not emp_data.empty else {}
 
 # --- Filter Section ---
