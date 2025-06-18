@@ -122,7 +122,7 @@ def calculate_balances(account_code, start_date, end_date, company_no): # Added 
     opening_balance_query = """
     SELECT COALESCE(SUM(CASE WHEN d.SD_DOC = 'D' THEN d.SD_AMT ELSE -d.SD_AMT END), 0) AS OB
     FROM ASPDT d
-    JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX -- Assuming join keys
+    JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern AND h.SP_DATE < :start_date_str
       AND h.SP_CO_NO = :company_no; -- Added company filter
     """
@@ -143,7 +143,7 @@ def calculate_balances(account_code, start_date, end_date, company_no): # Added 
         COALESCE(SUM(CASE WHEN d.SD_DOC = 'D' THEN d.SD_AMT ELSE 0 END), 0) AS PeriodDebits,
         COALESCE(SUM(CASE WHEN d.SD_DOC = 'C' THEN d.SD_AMT ELSE 0 END), 0) AS PeriodCredits
     FROM ASPDT d
-    JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX -- Assuming join keys
+    JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern AND h.SP_DATE BETWEEN :start_date_str AND :end_date_str
       AND h.SP_CO_NO = :company_no; -- Added company filter
     """
@@ -187,7 +187,7 @@ def fetch_drilldown_details(account_code, start_date, end_date, movement_type, c
         CASE WHEN d.SD_DOC = 'C' THEN d.SD_AMT ELSE 0 END AS CREDIT_AMOUNT,
         p.EM_NAME AS PREPARER_NAME
     FROM ASPDT d
-    JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX -- Assuming join keys
+    JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     LEFT JOIN AACNT a ON d.SD_ATNO = a.AT_NO
     LEFT JOIN PEMPLOYE p ON h.SP_MKMAN = p.EM_USERID
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern

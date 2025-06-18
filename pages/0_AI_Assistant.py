@@ -50,7 +50,7 @@ def load_accounting_data(_db_engine): # Pass engine as argument for caching
         d.SD_DCR AS VOUCHER_DETAIL_SUMMARY,
         h.SP_MKMAN
     FROM ASPDT d
-    INNER JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX
+    INNER JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     INNER JOIN AACNT a ON d.SD_ATNO = a.AT_NO
     WHERE h.SP_CHECK = '1'  -- Assuming '1' means approved/relevant
     ORDER BY h.SP_DATE DESC, h.SP_NO DESC;

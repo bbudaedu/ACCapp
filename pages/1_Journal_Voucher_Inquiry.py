@@ -102,7 +102,7 @@ if st.sidebar.button("查詢傳票", type="primary"):
             CASE h.SP_CHECK WHEN '1' THEN '已審核' ELSE '未審核' END AS AUDIT_STATUS_DESC,
             h.SP_CHECK -- for filtering
         FROM ASPDT d
-        INNER JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX -- Assuming SD_INDEX is part of the key
+        INNER JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
         LEFT JOIN AACNT a ON d.SD_ATNO = a.AT_NO
         LEFT JOIN PEMPLOYE p ON h.SP_MKMAN = p.EM_USERID
         """

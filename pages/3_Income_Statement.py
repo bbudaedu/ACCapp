@@ -80,7 +80,7 @@ def fetch_is_category_data_for_period(year, month, company_no): # Added company_
         query = """
         SELECT COALESCE(SUM(CASE WHEN d.SD_DOC = 'C' THEN d.SD_AMT ELSE -d.SD_AMT END), 0) AS Amount
         FROM ASPDT d
-        JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX
+        JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
         WHERE h.SP_CHECK = '1'
           AND d.SD_ATNO LIKE :acc_pattern
           AND h.SP_DATE BETWEEN :start_date AND :end_date

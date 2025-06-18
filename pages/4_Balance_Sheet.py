@@ -70,7 +70,7 @@ def get_account_balances(as_of_date_str, account_pattern_prefix, company_no): # 
         END), 0) AS NetDebitAmount
     FROM AACNT a
     LEFT JOIN ASPDT d ON a.AT_NO = d.SD_ATNO
-    LEFT JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX AND h.SP_CHECK = '1' AND h.SP_DATE <= :as_of_date
+    LEFT JOIN ASLIP h ON d.SD_NO = h.SP_NO AND h.SP_CHECK = '1' AND h.SP_DATE <= :as_of_date -- Removed d.SD_INDEX = h.SP_INDEX
     WHERE a.AT_NO LIKE :pattern AND h.SP_CO_NO = :company_no -- Added company filter
     GROUP BY a.AT_NO, a.AT_NAME, a.AT_DCR
     HAVING COALESCE(SUM(CASE WHEN d.SD_DOC = 'D' THEN d.SD_AMT WHEN d.SD_DOC = 'C' THEN -d.SD_AMT ELSE 0 END), 0) != 0
