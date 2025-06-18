@@ -23,14 +23,15 @@ if not db_engine:
 @st.cache_data(ttl=3600) # Cache company data longer
 def fetch_company_data_abi(): # For Account Balance Inquiry
     if not db_engine:
-        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+        return pd.DataFrame(columns=['CP_UNINO', 'CP_NAME']) # Use new column names
     try:
         with db_engine.connect() as connection:
-            df = pd.read_sql(text("SELECT CO_NO, CO_NAME FROM PCOMPANY ORDER BY CO_NO"), connection)
+            # Use new query: SELECT CP_UNINO, CP_NAME FROM PCOMPANY ORDER BY CP_NAME
+            df = pd.read_sql(text("SELECT CP_UNINO, CP_NAME FROM PCOMPANY ORDER BY CP_NAME"), connection)
             return df
     except Exception as e:
         st.error(f"獲取公司列表時發生錯誤 (科目餘額查詢): {e}")
-        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+        return pd.DataFrame(columns=['CP_UNINO', 'CP_NAME']) # Use new column names
 
 @st.cache_data(ttl=300) # Cache for 5 minutes for query results
 def execute_query(query, params=None):
@@ -44,13 +45,15 @@ def execute_query(query, params=None):
 # --- Load data for filters ---
 @st.cache_data(ttl=3600) # Cache for 1 hour
 def load_account_details():
-    acc_data_df = execute_query("SELECT AT_NO, AT_NAME, AT_DCR, AT_LEVEL FROM AACNT ORDER BY AT_NO;")
+    acc_data_df = execute_query("SELECT AT_NO, AT_NAME, AT_DCR FROM AACNT ORDER BY AT_NO;") # Removed AT_LEVEL from query
     if not acc_data_df.empty:
         options = {
-            row['AT_NO']: f"{row['AT_NO']} - {row['AT_NAME']} (Lvl: {row['AT_LEVEL']}, Bal: {row['AT_DCR']})"
+            # Removed AT_LEVEL from display string
+            row['AT_NO']: f"{row['AT_NO']} - {row['AT_NAME']} (Bal: {row['AT_DCR']})"
             for _, row in acc_data_df.iterrows()
         }
-        details = {row['AT_NO']: {'name': row['AT_NAME'], 'dcr': row['AT_DCR'], 'level': row['AT_LEVEL']} for _, row in acc_data_df.iterrows()}
+        # Removed 'level': row['AT_LEVEL'] from details dict
+        details = {row['AT_NO']: {'name': row['AT_NAME'], 'dcr': row['AT_DCR']} for _, row in acc_data_df.iterrows()}
         return options, details
     return {}, {}
 
@@ -61,20 +64,21 @@ st.sidebar.header("篩選條件")
 
 # Company Selector
 companies_df_abi = fetch_company_data_abi()
-company_options_abi = {row['CO_NO']: f"{row['CO_NO']} - {row['CO_NAME']}" for _, row in companies_df_abi.iterrows()} if not companies_df_abi.empty else {}
-selected_company_no_abi = None
+# Update to use CP_UNINO and CP_NAME
+company_options_abi = {row['CP_UNINO']: row['CP_NAME'] for _, row in companies_df_abi.iterrows()} if not companies_df_abi.empty else {}
+selected_company_unino_abi = None # Changed variable name
 selected_company_name_abi = "無公司"
 
 if not company_options_abi:
     st.sidebar.warning("未找到任何公司資料 (科目餘額查詢)。")
 else:
-    default_company_no_abi = list(company_options_abi.keys())[0]
-    selected_company_no_abi = st.sidebar.selectbox(
-        "公司 (Company)", options=list(company_options_abi.keys()),
-        format_func=lambda x: company_options_abi.get(x, "未知公司"),
-        key="abi_company_no", index=0
+    default_company_unino_abi = list(company_options_abi.keys())[0]
+    selected_company_unino_abi = st.sidebar.selectbox(
+        "公司 (Company)", options=list(company_options_abi.keys()), # Options are CP_UNINO
+        format_func=lambda x: company_options_abi.get(x, "未知公司"), # Format uses CP_NAME
+        key="abi_company_unino", index=0 # Changed key
     )
-    selected_company_name_abi = company_options_abi.get(selected_company_no_abi, "未知公司")
+    selected_company_name_abi = company_options_abi.get(selected_company_unino_abi, "未知公司")
 
 default_start_date_bal = datetime.date.today().replace(day=1)
 default_end_date_bal = datetime.date.today()
@@ -100,14 +104,16 @@ if 'last_selected_acc_code_bal' not in st.session_state:
     st.session_state.last_selected_acc_code_bal = None
 if 'last_date_range_bal' not in st.session_state:
     st.session_state.last_date_range_bal = None
-if 'last_selected_company_no_abi' not in st.session_state: # For retaining company filter context
-    st.session_state.last_selected_company_no_abi = None
+if 'last_selected_company_no_abi' not in st.session_state:
+    st.session_state.last_selected_company_no_abi = None # This will store CP_UNINO
+if 'last_selected_company_name_abi' not in st.session_state: # To store name for display
+    st.session_state.last_selected_company_name_abi = None
 
 
 # --- Calculation Logic ---
-def calculate_balances(account_code, start_date, end_date, company_no): # Added company_no
-    if not company_no:
-        st.error("錯誤：計算餘額時未提供公司代號。")
+def calculate_balances(account_code, start_date, end_date, company_unino): # Parameter name changed
+    if not company_unino: # Check updated param name
+        st.error("錯誤：計算餘額時未提供公司統編。")
         return None
     account_detail = acc_details.get(account_code)
     if not account_detail:
@@ -124,11 +130,11 @@ def calculate_balances(account_code, start_date, end_date, company_no): # Added 
     FROM ASPDT d
     JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern AND h.SP_DATE < :start_date_str
-      AND h.SP_CO_NO = :company_no; -- Added company filter
+      AND h.SP_CO_NO = :company_unino; -- Use company_unino
     """
     ob_params = {'acc_pattern': f"{account_code}%",
                  'start_date_str': start_date.strftime('%Y%m%d'),
-                 'company_no': company_no}
+                 'company_unino': company_unino} # Use company_unino
     ob_df = execute_query(opening_balance_query, ob_params)
     opening_balance_raw = ob_df.iloc[0]['OB'] if not ob_df.empty and 'OB' in ob_df.columns else 0
 
@@ -145,13 +151,13 @@ def calculate_balances(account_code, start_date, end_date, company_no): # Added 
     FROM ASPDT d
     JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern AND h.SP_DATE BETWEEN :start_date_str AND :end_date_str
-      AND h.SP_CO_NO = :company_no; -- Added company filter
+      AND h.SP_CO_NO = :company_unino; -- Use company_unino
     """
     pm_params = {
         'acc_pattern': f"{account_code}%",
         'start_date_str': start_date.strftime('%Y%m%d'),
         'end_date_str': end_date.strftime('%Y%m%d'),
-        'company_no': company_no
+        'company_unino': company_unino # Use company_unino
     }
     pm_df = execute_query(period_movements_query, pm_params)
     period_debits = pm_df.iloc[0]['PeriodDebits'] if not pm_df.empty and 'PeriodDebits' in pm_df.columns else 0
@@ -170,9 +176,9 @@ def calculate_balances(account_code, start_date, end_date, company_no): # Added 
         "closing": closing_balance
     }
 
-def fetch_drilldown_details(account_code, start_date, end_date, movement_type, company_no): # Added company_no
-    if not company_no:
-        st.error("錯誤：載入明細時未提供公司代號。")
+def fetch_drilldown_details(account_code, start_date, end_date, movement_type, company_unino): # Parameter name changed
+    if not company_unino: # Check updated param name
+        st.error("錯誤：載入明細時未提供公司統編。")
         return pd.DataFrame()
     doc_type_filter = "d.SD_DOC = 'D'" if movement_type == 'debits' else "d.SD_DOC = 'C'"
 
@@ -193,14 +199,14 @@ def fetch_drilldown_details(account_code, start_date, end_date, movement_type, c
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern
       AND h.SP_DATE BETWEEN :start_date_str AND :end_date_str
       AND {doc_type_filter}
-      AND h.SP_CO_NO = :company_no -- Added company filter
+      AND h.SP_CO_NO = :company_unino -- Use company_unino
     ORDER BY h.SP_DATE, h.SP_NO;
     """
     drill_params = {
         'acc_pattern': f"{account_code}%",
         'start_date_str': start_date.strftime('%Y%m%d'),
         'end_date_str': end_date.strftime('%Y%m%d'),
-        'company_no': company_no
+        'company_unino': company_unino # Use company_unino
     }
     df_details = execute_query(drilldown_query, drill_params)
 
@@ -215,27 +221,27 @@ def fetch_drilldown_details(account_code, start_date, end_date, movement_type, c
 
 # --- UI Interactions ---
 if st.sidebar.button("查詢餘額", type="primary", key="query_balance_button"):
-    if not selected_company_no_abi:
+    if not selected_company_unino_abi: # Check updated variable
         st.warning("請選擇一個公司。")
     elif not start_date_bal or not end_date_bal:
         st.warning("請提供完整的日期區間。")
     elif not selected_acc_code_bal:
         st.warning("請選擇一個會計科目。")
     else:
-        with st.spinner(f"正在為 {selected_company_name_abi} 計算餘額..."): # Updated spinner
-            st.session_state.account_balance_info = calculate_balances(selected_acc_code_bal, start_date_bal, end_date_bal, selected_company_no_abi)
+        with st.spinner(f"正在為 {selected_company_name_abi} 計算餘額..."):
+            st.session_state.account_balance_info = calculate_balances(selected_acc_code_bal, start_date_bal, end_date_bal, selected_company_unino_abi) # Pass CP_UNINO
             st.session_state.drilldown_data = pd.DataFrame()
             st.session_state.drilldown_type = None
             st.session_state.last_selected_acc_code_bal = selected_acc_code_bal
             st.session_state.last_date_range_bal = (start_date_bal, end_date_bal)
-            st.session_state.last_selected_company_no_abi = selected_company_no_abi # Store last company
+            st.session_state.last_selected_company_no_abi = selected_company_unino_abi
+            st.session_state.last_selected_company_name_abi = selected_company_name_abi # Store name for display
 
 
 # --- Display Area for Balance Information ---
 if st.session_state.account_balance_info and st.session_state.last_selected_acc_code_bal and st.session_state.last_selected_company_no_abi:
     info = st.session_state.account_balance_info
-    # Display company name in subheader
-    company_display_name = company_options_abi.get(st.session_state.last_selected_company_no_abi, "未知公司")
+    company_display_name = st.session_state.last_selected_company_name_abi # Use stored name
     acc_name_display = acc_options.get(st.session_state.last_selected_acc_code_bal, "選定科目")
     st.subheader(f"公司: {company_display_name} - 科目餘額: {acc_name_display}")
 
@@ -253,7 +259,7 @@ if st.session_state.account_balance_info and st.session_state.last_selected_acc_
                     st.session_state.last_date_range_bal[0],
                     st.session_state.last_date_range_bal[1],
                     'debits',
-                    st.session_state.last_selected_company_no_abi # Pass company
+                    st.session_state.last_selected_company_no_abi
                 )
 
     col3.metric("期間貸方總額", f"{info['credits']:,.2f}")
@@ -266,27 +272,29 @@ if st.session_state.account_balance_info and st.session_state.last_selected_acc_
                     st.session_state.last_date_range_bal[0],
                     st.session_state.last_date_range_bal[1],
                     'credits',
-                    st.session_state.last_selected_company_no_abi # Pass company
+                    st.session_state.last_selected_company_no_abi
                 )
 
     col4.metric("期末餘額", f"{info['closing']:,.2f}")
-    st.caption(f"科目 {st.session_state.last_selected_acc_code_bal} ({acc_details.get(st.session_state.last_selected_acc_code_bal, {}).get('dcr', 'N/A')}類) 於公司 {company_display_name}。") # Updated caption
+    st.caption(f"科目 {st.session_state.last_selected_acc_code_bal} ({acc_details.get(st.session_state.last_selected_acc_code_bal, {}).get('dcr', 'N/A')}類) 於公司 {company_display_name}。")
 
 else:
-    st.info("請在側邊欄選擇公司、日期區間和會計科目後，點擊「查詢餘額」。") # Updated prompt
+    st.info("請在側邊欄選擇公司、日期區間和會計科目後，點擊「查詢餘額」。")
 
 # --- Display Area for Drill-down Details ---
 if not st.session_state.drilldown_data.empty:
     st.markdown("---")
-    company_display_name_drill = company_options_abi.get(st.session_state.last_selected_company_no_abi, "所選公司")
+    # Use stored company name for drilldown subheader
+    company_display_name_drill = st.session_state.last_selected_company_name_abi
     acc_name_display_drill = acc_options.get(st.session_state.last_selected_acc_code_bal, "選定科目")
-    st.subheader(f"公司: {company_display_name_drill} - 科目: {acc_name_display_drill} - {st.session_state.drilldown_type} 明細") # More context
+    st.subheader(f"公司: {company_display_name_drill} - 科目: {acc_name_display_drill} - {st.session_state.drilldown_type} 明細")
     st.dataframe(st.session_state.drilldown_data, height=300, use_container_width=True)
 elif st.session_state.drilldown_type and st.session_state.drilldown_data.empty:
     st.markdown("---")
-    company_display_name_drill = company_options_abi.get(st.session_state.last_selected_company_no_abi, "所選公司")
+    # Use stored company name
+    company_display_name_drill = st.session_state.last_selected_company_name_abi
     acc_name_display_drill = acc_options.get(st.session_state.last_selected_acc_code_bal, "選定科目")
-    st.info(f"公司 {company_display_name_drill} 之科目 {acc_name_display_drill} 在選定期間內無 {st.session_state.drilldown_type} 明細可顯示。") # More context
+    st.info(f"公司 {company_display_name_drill} 之科目 {acc_name_display_drill} 在選定期間內無 {st.session_state.drilldown_type} 明細可顯示。")
 
 
 st.sidebar.info("提示：選擇父科目將會彙總其所有子科目的餘額。")

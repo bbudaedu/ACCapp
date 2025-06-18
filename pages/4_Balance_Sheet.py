@@ -27,16 +27,17 @@ if not db_engine:
 
 # --- Helper function to fetch data ---
 @st.cache_data(ttl=3600) # Cache company data longer
-def fetch_company_data_bs(): # Renamed for Balance Sheet page
+def fetch_company_data_bs():
     if not db_engine:
-        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+        return pd.DataFrame(columns=['CP_UNINO', 'CP_NAME']) # Use new column names
     try:
         with db_engine.connect() as connection:
-            df = pd.read_sql(text("SELECT CO_NO, CO_NAME FROM PCOMPANY ORDER BY CO_NO"), connection)
+            # Use new query: SELECT CP_UNINO, CP_NAME FROM PCOMPANY ORDER BY CP_NAME
+            df = pd.read_sql(text("SELECT CP_UNINO, CP_NAME FROM PCOMPANY ORDER BY CP_NAME"), connection)
             return df
     except Exception as e:
         st.error(f"獲取公司列表時發生錯誤 (資產負債表): {e}")
-        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+        return pd.DataFrame(columns=['CP_UNINO', 'CP_NAME']) # Use new column names
 
 @st.cache_data(ttl=300)
 def execute_query(query, params=None):
@@ -196,20 +197,21 @@ st.sidebar.header("報表參數")
 
 # Company Selector
 companies_df_bs = fetch_company_data_bs()
-company_options_bs = {row['CO_NO']: f"{row['CO_NO']} - {row['CO_NAME']}" for _, row in companies_df_bs.iterrows()} if not companies_df_bs.empty else {}
-selected_company_no_bs = None
+# Update to use CP_UNINO and CP_NAME
+company_options_bs = {row['CP_UNINO']: row['CP_NAME'] for _, row in companies_df_bs.iterrows()} if not companies_df_bs.empty else {}
+selected_company_unino_bs = None # Changed variable name
 selected_company_name_bs = "無公司"
 
 if not company_options_bs:
     st.sidebar.warning("未找到任何公司資料 (資產負債表)。")
 else:
-    default_company_no_bs = list(company_options_bs.keys())[0]
-    selected_company_no_bs = st.sidebar.selectbox(
-        "公司 (Company)", options=list(company_options_bs.keys()),
-        format_func=lambda x: company_options_bs.get(x, "未知公司"),
-        key="bs_company_no", index=0
+    default_company_unino_bs = list(company_options_bs.keys())[0]
+    selected_company_unino_bs = st.sidebar.selectbox(
+        "公司 (Company)", options=list(company_options_bs.keys()), # Options are CP_UNINO
+        format_func=lambda x: company_options_bs.get(x, "未知公司"), # Format uses CP_NAME
+        key="bs_company_unino", index=0 # Changed key
     )
-    selected_company_name_bs = company_options_bs.get(selected_company_no_bs, "未知公司")
+    selected_company_name_bs = company_options_bs.get(selected_company_unino_bs, "未知公司")
 
 default_bs_date = datetime.date.today()
 bs_as_of_date = st.sidebar.date_input("選擇截止日期 (As of Date)", value=default_bs_date, key="bs_as_of_date")
@@ -226,18 +228,18 @@ if 'balance_sheet_params' not in st.session_state:
 
 # --- Generate Report Button ---
 if st.sidebar.button("生成報表", type="primary", key="generate_bs_button"):
-    if not selected_company_no_bs:
+    if not selected_company_unino_bs: # Check updated variable
         st.error("請選擇一個公司。")
     elif not bs_as_of_date:
         st.warning("請選擇截止日期。")
     else:
         st.session_state.balance_sheet_params = {
             "as_of_date": bs_as_of_date,
-            "company_no": selected_company_no_bs, # Store selected company
+            "company_unino": selected_company_unino_bs, # Store CP_UNINO
             "company_name": selected_company_name_bs
         }
-        with st.spinner(f"正在為 {selected_company_name_bs} 生成截至 {bs_as_of_date.strftime('%Y-%m-%d')} 的資產負債表..."): # Updated spinner
-            raw_df, totals = generate_balance_sheet_df(bs_as_of_date, selected_company_no_bs) # Pass company_no
+        with st.spinner(f"正在為 {selected_company_name_bs} 生成截至 {bs_as_of_date.strftime('%Y-%m-%d')} 的資產負債表..."):
+            raw_df, totals = generate_balance_sheet_df(bs_as_of_date, selected_company_unino_bs) # Pass CP_UNINO
             st.session_state.balance_sheet_raw_df = raw_df.copy()
             st.session_state.balance_sheet_totals = totals
 
@@ -280,16 +282,16 @@ if not st.session_state.balance_sheet_display_df.empty and st.session_state.bala
     excel_data = bs_df_to_excel(st.session_state.balance_sheet_raw_df, params)
     col_export_bs1.download_button(
         label="📥 匯出 Excel", data=excel_data,
-        file_name=f"BalanceSheet_{params.get('company_no','ALL')}_{params['as_of_date'].strftime('%Y%m%d')}.xlsx", # Add company
+        file_name=f"BalanceSheet_{params.get('company_unino','ALL')}_{params['as_of_date'].strftime('%Y%m%d')}.xlsx", # Use company_unino
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
     pdf_data = bs_df_to_pdf(st.session_state.balance_sheet_display_df, params)
     col_export_bs2.download_button(
         label="📄 匯出 PDF", data=pdf_data,
-        file_name=f"BalanceSheet_{params.get('company_no','ALL')}_{params['as_of_date'].strftime('%Y%m%d')}.pdf", # Add company
+        file_name=f"BalanceSheet_{params.get('company_unino','ALL')}_{params['as_of_date'].strftime('%Y%m%d')}.pdf", # Use company_unino
         mime="application/pdf"
     )
 else:
-    st.info("請在側邊欄選擇公司和截止日期後，點擊「生成報表」。") # Updated prompt
+    st.info("請在側邊欄選擇公司和截止日期後，點擊「生成報表」。")
 
 st.sidebar.info("提示：此為簡化版資產負債表。詳細科目分類及保留盈餘的精確計算可能需要更複雜的科目設定和損益數據。")

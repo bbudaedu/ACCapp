@@ -32,17 +32,18 @@ def fetch_scalar_data(query, params=None):
         return 0
 
 @st.cache_data(ttl=3600)
-def fetch_company_data():
+def fetch_company_data(): # Renamed to fetch_company_data_dashboard for clarity if needed, but standalone is fine.
     if not db_engine:
         st.error("資料庫引擎未能初始化，無法獲取公司列表。")
-        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+        return pd.DataFrame(columns=['CP_UNINO', 'CP_NAME']) # Use new column names
     try:
         with db_engine.connect() as connection:
-            df = pd.read_sql(text("SELECT CO_NO, CO_NAME FROM PCOMPANY ORDER BY CO_NO"), connection)
+            # Use new query: SELECT CP_UNINO, CP_NAME FROM PCOMPANY ORDER BY CP_NAME
+            df = pd.read_sql(text("SELECT CP_UNINO, CP_NAME FROM PCOMPANY ORDER BY CP_NAME"), connection)
             return df
     except Exception as e:
         st.error(f"獲取公司列表時發生錯誤: {e}")
-        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+        return pd.DataFrame(columns=['CP_UNINO', 'CP_NAME']) # Use new column names
 
 # --- Account Patterns ---
 KPI_ACCOUNT_PATTERNS = {
@@ -59,20 +60,22 @@ EXPENSE_PIE_CHART_CATEGORIES = {
 
 # --- Sidebar Filters ---
 st.sidebar.header("篩選條件 (Filters)")
-companies_df = fetch_company_data()
-company_options = {row['CO_NO']: f"{row['CO_NO']} - {row['CO_NAME']}" for _, row in companies_df.iterrows()} if not companies_df.empty else {}
-selected_company_no = None
-selected_company_name = "無公司"
-if not company_options:
+companies_df_dash = fetch_company_data() # Use a distinct variable name
+# Update to use CP_UNINO and CP_NAME
+company_options_dash = {row['CP_UNINO']: row['CP_NAME'] for _, row in companies_df_dash.iterrows()} if not companies_df_dash.empty else {}
+selected_company_unino_dash = None # Changed variable name
+selected_company_name_dash = "無公司" # Changed variable name
+
+if not company_options_dash:
     st.sidebar.warning("未找到任何公司資料。請檢查 PCOMPANY 表。")
 else:
-    default_company_no = list(company_options.keys())[0]
-    selected_company_no = st.sidebar.selectbox(
-        "公司 (Company)", options=list(company_options.keys()),
-        format_func=lambda x: company_options.get(x, "未知公司"),
-        key="dashboard_company_no", index=0
+    default_company_unino_dash = list(company_options_dash.keys())[0]
+    selected_company_unino_dash = st.sidebar.selectbox(
+        "公司 (Company)", options=list(company_options_dash.keys()), # Options are CP_UNINO
+        format_func=lambda x: company_options_dash.get(x, "未知公司"), # Format uses CP_NAME
+        key="dashboard_company_unino", index=0 # Changed key
     )
-    selected_company_name = company_options.get(selected_company_no, "未知公司")
+    selected_company_name_dash = company_options_dash.get(selected_company_unino_dash, "未知公司")
 
 today = datetime.date.today()
 first_day_current_month = today.replace(day=1)
@@ -90,22 +93,22 @@ else:
     st.sidebar.warning("請選擇完整的日期區間。")
 
 # --- Data Loading Function ---
-def get_period_financial_data(company_no, start_date_str, end_date_str, account_pattern):
+def get_period_financial_data(company_unino, start_date_str, end_date_str, account_pattern): # Param name changed
     query = """
     SELECT COALESCE(SUM(CASE WHEN d.SD_DOC = 'C' THEN d.SD_AMT ELSE -d.SD_AMT END), 0) AS Amount
     FROM ASPDT d JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
     WHERE h.SP_CHECK = '1' AND d.SD_ATNO LIKE :acc_pattern
-      AND h.SP_DATE BETWEEN :start_date AND :end_date AND h.SP_CO_NO = :company_no
+      AND h.SP_DATE BETWEEN :start_date AND :end_date AND h.SP_CO_NO = :company_unino -- Param name in query changed
     """
     params = {
         'acc_pattern': account_pattern,
         'start_date': start_date_str, 'end_date': end_date_str,
-        'company_no': company_no
+        'company_unino': company_unino # Param name in dict changed
     }
     return fetch_scalar_data(query, params)
 
-def load_dashboard_data(company_no, current_start_dt, current_end_dt):
-    if not company_no or not current_start_dt or not current_end_dt:
+def load_dashboard_data(company_unino, current_start_dt, current_end_dt): # Param name changed
+    if not company_unino or not current_start_dt or not current_end_dt: # Check updated param
         st.session_state.dashboard_kpis = {k: {"value": 0, "delta": "N/A"} for k in ["revenue", "expenses", "net_profit", "ytd_revenue"]}
         st.session_state.dashboard_charts_data = {
             "monthly_revenue": pd.DataFrame(), "profit_margins": pd.DataFrame(),
@@ -118,17 +121,17 @@ def load_dashboard_data(company_no, current_start_dt, current_end_dt):
     end_date_str_period = current_end_dt.strftime('%Y%m%d')
 
     # --- KPI Calculations ---
-    revenue_period = get_period_financial_data(company_no, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["Revenue"])
-    cogs_period_raw = get_period_financial_data(company_no, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["COGS"])
-    opex_period_raw = get_period_financial_data(company_no, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["OpEx"])
-    non_op_income_period = get_period_financial_data(company_no, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["NonOpIncome"])
-    non_op_expense_period = get_period_financial_data(company_no, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["NonOpExpense"])
+    revenue_period = get_period_financial_data(company_unino, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["Revenue"])
+    cogs_period_raw = get_period_financial_data(company_unino, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["COGS"])
+    opex_period_raw = get_period_financial_data(company_unino, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["OpEx"])
+    non_op_income_period = get_period_financial_data(company_unino, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["NonOpIncome"])
+    non_op_expense_period = get_period_financial_data(company_unino, start_date_str_period, end_date_str_period, KPI_ACCOUNT_PATTERNS["NonOpExpense"])
 
     current_period_total_expenses_display = -(cogs_period_raw + opex_period_raw) # For KPI display (positive)
     current_period_net_profit = revenue_period + cogs_period_raw + opex_period_raw + non_op_income_period + non_op_expense_period
 
     year_start_dt_for_ytd = current_end_dt.replace(month=1, day=1)
-    ytd_revenue = get_period_financial_data(company_no, year_start_dt_for_ytd.strftime('%Y%m%d'), end_date_str_period, KPI_ACCOUNT_PATTERNS["Revenue"])
+    ytd_revenue = get_period_financial_data(company_unino, year_start_dt_for_ytd.strftime('%Y%m%d'), end_date_str_period, KPI_ACCOUNT_PATTERNS["Revenue"])
 
     st.session_state.dashboard_kpis = {
         "revenue": {"value": revenue_period, "delta": "N/A"},
@@ -147,13 +150,13 @@ def load_dashboard_data(company_no, current_start_dt, current_end_dt):
         month_start_str = month_loop_end_dt.replace(day=1).strftime('%Y%m%d')
         month_end_str = month_loop_end_dt.strftime('%Y%m%d')
 
-        rev = get_period_financial_data(company_no, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["Revenue"])
+        rev = get_period_financial_data(company_unino, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["Revenue"])
         monthly_revenue_list.append({'月份 (Month)': month_label, '收入 (Revenue)': rev})
 
-        cogs = get_period_financial_data(company_no, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["COGS"])
-        opex = get_period_financial_data(company_no, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["OpEx"])
-        non_op_inc = get_period_financial_data(company_no, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["NonOpIncome"])
-        non_op_exp = get_period_financial_data(company_no, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["NonOpExpense"])
+        cogs = get_period_financial_data(company_unino, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["COGS"])
+        opex = get_period_financial_data(company_unino, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["OpEx"])
+        non_op_inc = get_period_financial_data(company_unino, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["NonOpIncome"])
+        non_op_exp = get_period_financial_data(company_unino, month_start_str, month_end_str, KPI_ACCOUNT_PATTERNS["NonOpExpense"])
 
         gross_profit_month = rev + cogs
         net_profit_month = gross_profit_month + opex + non_op_inc + non_op_exp
@@ -167,16 +170,15 @@ def load_dashboard_data(company_no, current_start_dt, current_end_dt):
     # --- Chart Data: Expense Structure Pie Chart (Current Period) ---
     expense_pie_data = []
     for category_name, acc_pattern in EXPENSE_PIE_CHART_CATEGORIES.items():
-        # Fetch raw expense value (will be negative if it's a net debit)
-        raw_expense_value = get_period_financial_data(company_no, start_date_str_period, end_date_str_period, acc_pattern)
-        # For pie chart, use positive values
+        raw_expense_value = get_period_financial_data(company_unino, start_date_str_period, end_date_str_period, acc_pattern)
         display_expense_value = abs(raw_expense_value)
-        if display_expense_value > 0: # Only add to pie if there's an amount
+        if display_expense_value > 0:
              expense_pie_data.append({'費用類別 (Expense Category)': category_name, '金額 (Amount)': display_expense_value})
 
     st.session_state.dashboard_charts_data['expense_structure'] = pd.DataFrame(expense_pie_data)
 
-    st.success(f"{selected_company_name} ({company_no}) 儀表板數據已更新 ({current_start_dt.strftime('%Y-%m-%d')} 至 {current_end_dt.strftime('%Y-%m-%d')})")
+    # Use selected_company_name_dash for the success message as it's from the current UI selection
+    st.success(f"{selected_company_name_dash} ({company_unino}) 儀表板數據已更新 ({current_start_dt.strftime('%Y-%m-%d')} 至 {current_end_dt.strftime('%Y-%m-%d')})")
 
 # --- Session State Init ---
 if 'dashboard_kpis' not in st.session_state:
@@ -190,13 +192,13 @@ if 'dashboard_charts_data' not in st.session_state:
 
 # --- Refresh button logic ---
 if st.sidebar.button("刷新儀表板 (Refresh Dashboard)", type="primary", key="dash_refresh_button"):
-    if selected_company_no and start_date_dash and end_date_dash:
-        load_dashboard_data(selected_company_no, start_date_dash, end_date_dash)
+    if selected_company_unino_dash and start_date_dash and end_date_dash: # Check updated variable
+        load_dashboard_data(selected_company_unino_dash, start_date_dash, end_date_dash) # Pass CP_UNINO
     else:
         st.sidebar.error("請選擇公司和完整的日期區間。")
 
 # --- Main Dashboard Area ---
-st.markdown(f"### 公司: {selected_company_name}")
+st.markdown(f"### 公司: {selected_company_name_dash}") # Use updated variable
 st.markdown("---")
 
 # Helper for date caption, defined once
