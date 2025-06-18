@@ -3,3 +3,6 @@ numpy==1.24.4
 streamlit==1.28.2
 sqlalchemy
 pandasai
+plotly
+openpyxl
+fpdf2
