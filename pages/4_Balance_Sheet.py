@@ -228,18 +228,22 @@ if 'balance_sheet_params' not in st.session_state:
 
 # --- Generate Report Button ---
 if st.sidebar.button("生成報表", type="primary", key="generate_bs_button"):
-    if not selected_company_unino_bs: # Check updated variable
+    # Retrieve selected company from session state using the widget's key
+    selected_company_unino_from_state = st.session_state.get('bs_company_unino')
+    current_selected_company_name = company_options_bs.get(selected_company_unino_from_state, "未知公司")
+
+    if not selected_company_unino_from_state:
         st.error("請選擇一個公司。")
     elif not bs_as_of_date:
         st.warning("請選擇截止日期。")
     else:
         st.session_state.balance_sheet_params = {
             "as_of_date": bs_as_of_date,
-            "company_unino": selected_company_unino_bs, # Store CP_UNINO
-            "company_name": selected_company_name_bs
+            "company_unino": selected_company_unino_from_state,
+            "company_name": current_selected_company_name # Use name derived from state
         }
-        with st.spinner(f"正在為 {selected_company_name_bs} 生成截至 {bs_as_of_date.strftime('%Y-%m-%d')} 的資產負債表..."):
-            raw_df, totals = generate_balance_sheet_df(bs_as_of_date, selected_company_unino_bs) # Pass CP_UNINO
+        with st.spinner(f"正在為 {current_selected_company_name} 生成截至 {bs_as_of_date.strftime('%Y-%m-%d')} 的資產負債表..."):
+            raw_df, totals = generate_balance_sheet_df(bs_as_of_date, selected_company_unino_from_state)
             st.session_state.balance_sheet_raw_df = raw_df.copy()
             st.session_state.balance_sheet_totals = totals
 

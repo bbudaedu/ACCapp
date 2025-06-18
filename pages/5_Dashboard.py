@@ -192,13 +192,20 @@ if 'dashboard_charts_data' not in st.session_state:
 
 # --- Refresh button logic ---
 if st.sidebar.button("刷新儀表板 (Refresh Dashboard)", type="primary", key="dash_refresh_button"):
-    if selected_company_unino_dash and start_date_dash and end_date_dash: # Check updated variable
-        load_dashboard_data(selected_company_unino_dash, start_date_dash, end_date_dash) # Pass CP_UNINO
+    # Retrieve selected company from session state using the widget's key for button click action
+    company_unino_for_load = st.session_state.get('dashboard_company_unino')
+    # The selected_company_name_dash is already up-to-date from widget interaction if script re-ran post selection
+    # If not, we can fetch it: current_selected_company_name_for_load = company_options_dash.get(company_unino_for_load, "未知公司")
+
+    if company_unino_for_load and start_date_dash and end_date_dash:
+        load_dashboard_data(company_unino_for_load, start_date_dash, end_date_dash)
     else:
         st.sidebar.error("請選擇公司和完整的日期區間。")
 
 # --- Main Dashboard Area ---
-st.markdown(f"### 公司: {selected_company_name_dash}") # Use updated variable
+# Display the name based on the selectbox's current value (selected_company_name_dash)
+# This variable is updated whenever the selectbox changes and the script reruns.
+st.markdown(f"### 公司: {selected_company_name_dash}")
 st.markdown("---")
 
 # Helper for date caption, defined once

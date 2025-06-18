@@ -309,16 +309,21 @@ if 'income_statement_display_params' not in st.session_state:
 
 # --- Generate Report Button ---
 if st.sidebar.button("生成報表", type="primary", key="is_generate_button"):
-    if not selected_company_unino_is: # Check updated variable
+    # Retrieve selected company from session state using the widget's key
+    selected_company_unino_from_state = st.session_state.get('is_company_unino')
+    current_selected_company_name = company_options_is.get(selected_company_unino_from_state, "未知公司")
+
+    if not selected_company_unino_from_state:
         st.error("請選擇一個公司。")
     else:
         st.session_state.income_statement_display_params = {
-            "company_name": selected_company_name_is, "company_unino": selected_company_unino_is, # Store CP_UNINO
+            "company_name": current_selected_company_name, # Use name derived from state
+            "company_unino": selected_company_unino_from_state,
             "year": selected_year, "month": selected_month,
             "compare_ly": compare_ly_cb, "compare_lm": compare_lm_cb
         }
-        with st.spinner(f"正在為 {selected_company_name_is} 生成 {selected_year} 年 {selected_month:02d} 月損益表..."):
-            current_data_raw_cats = fetch_is_category_data_for_period(selected_year, selected_month, selected_company_unino_is) # Pass CP_UNINO
+        with st.spinner(f"正在為 {current_selected_company_name} 生成 {selected_year} 年 {selected_month:02d} 月損益表..."):
+            current_data_raw_cats = fetch_is_category_data_for_period(selected_year, selected_month, selected_company_unino_from_state)
             current_data_calculated = calculate_derived_is_items(current_data_raw_cats.copy())
 
             ly_data_calculated, lm_data_calculated = None, None
@@ -328,11 +333,11 @@ if st.sidebar.button("生成報表", type="primary", key="is_generate_button"):
 
             if compare_ly_cb:
                 ly_label_for_df = f"金額 ({ly_year}/{ly_month:02d} LY)"
-                ly_data_raw_cats = fetch_is_category_data_for_period(ly_year, ly_month, selected_company_unino_is) # Pass CP_UNINO
+                ly_data_raw_cats = fetch_is_category_data_for_period(ly_year, ly_month, selected_company_unino_from_state)
                 ly_data_calculated = calculate_derived_is_items(ly_data_raw_cats.copy())
             if compare_lm_cb:
                 lm_label_for_df = f"金額 ({lm_year}/{lm_month:02d} LM)"
-                lm_data_raw_cats = fetch_is_category_data_for_period(lm_year, lm_month, selected_company_unino_is) # Pass CP_UNINO
+                lm_data_raw_cats = fetch_is_category_data_for_period(lm_year, lm_month, selected_company_unino_from_state)
                 lm_data_calculated = calculate_derived_is_items(lm_data_raw_cats.copy())
 
         current_period_label_for_df = f"{selected_year}/{selected_month:02d} 金額"

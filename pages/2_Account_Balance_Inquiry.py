@@ -78,7 +78,7 @@ else:
         format_func=lambda x: company_options_abi.get(x, "未知公司"), # Format uses CP_NAME
         key="abi_company_unino", index=0 # Changed key
     )
-    selected_company_name_abi = company_options_abi.get(selected_company_unino_abi, "未知公司")
+    selected_company_name_abi = company_options_abi.get(selected_company_unino_abi, "未知公司") # This remains for initial display if needed, but button logic will use session_state
 
 default_start_date_bal = datetime.date.today().replace(day=1)
 default_end_date_bal = datetime.date.today()
@@ -221,27 +221,43 @@ def fetch_drilldown_details(account_code, start_date, end_date, movement_type, c
 
 # --- UI Interactions ---
 if st.sidebar.button("查詢餘額", type="primary", key="query_balance_button"):
-    if not selected_company_unino_abi: # Check updated variable
+    # Retrieve selected company from session state using the widget's key
+    selected_company_unino_from_state = st.session_state.get('abi_company_unino')
+    # The selected_company_name_abi can be fetched using the UNINO from state and options dict
+    current_selected_company_name = company_options_abi.get(selected_company_unino_from_state, "未知公司")
+
+    if not selected_company_unino_from_state:
         st.warning("請選擇一個公司。")
     elif not start_date_bal or not end_date_bal:
         st.warning("請提供完整的日期區間。")
     elif not selected_acc_code_bal:
         st.warning("請選擇一個會計科目。")
     else:
-        with st.spinner(f"正在為 {selected_company_name_abi} 計算餘額..."):
-            st.session_state.account_balance_info = calculate_balances(selected_acc_code_bal, start_date_bal, end_date_bal, selected_company_unino_abi) # Pass CP_UNINO
+        with st.spinner(f"正在為 {current_selected_company_name} 計算餘額..."):
+            st.session_state.account_balance_info = calculate_balances(
+                selected_acc_code_bal,
+                start_date_bal,
+                end_date_bal,
+                selected_company_unino_from_state # Use value from session state
+            )
             st.session_state.drilldown_data = pd.DataFrame()
             st.session_state.drilldown_type = None
+            # Store all current selections in session state for consistent display and drilldown
             st.session_state.last_selected_acc_code_bal = selected_acc_code_bal
             st.session_state.last_date_range_bal = (start_date_bal, end_date_bal)
-            st.session_state.last_selected_company_no_abi = selected_company_unino_abi
-            st.session_state.last_selected_company_name_abi = selected_company_name_abi # Store name for display
+            st.session_state.last_selected_company_no_abi = selected_company_unino_from_state
+            st.session_state.last_selected_company_name_abi = current_selected_company_name
 
 
 # --- Display Area for Balance Information ---
-if st.session_state.account_balance_info and st.session_state.last_selected_acc_code_bal and st.session_state.last_selected_company_no_abi:
+# Use values from session state that were set when the button was clicked
+if st.session_state.account_balance_info and \
+   st.session_state.get('last_selected_acc_code_bal') and \
+   st.session_state.get('last_selected_company_no_abi') and \
+   st.session_state.get('last_selected_company_name_abi'):
+
     info = st.session_state.account_balance_info
-    company_display_name = st.session_state.last_selected_company_name_abi # Use stored name
+    company_display_name = st.session_state.last_selected_company_name_abi
     acc_name_display = acc_options.get(st.session_state.last_selected_acc_code_bal, "選定科目")
     st.subheader(f"公司: {company_display_name} - 科目餘額: {acc_name_display}")
 
