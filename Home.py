@@ -7,7 +7,7 @@ st.set_page_config(
 )
 
 st.title("現代化會計查詢與報表系統")
-st.sidebar.success("請從上方選擇一個功能模組。")
+st.sidebar.success("請從左方選擇一個功能模組。")
 
 st.markdown(
     """

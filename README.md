@@ -1,111 +1,221 @@
-# ACCapp (智能會計助理)
+# Modernized Accounting Inquiry and Reporting System (現代化會計查詢與報表系統)
 
-## 概覽
+## Overview (概述)
 
-ACCapp 是一款創新的應用程式，旨在讓您通過自然語言與您的會計數據進行互動。您可以像與人交談一樣，向應用程式提問關於存儲在 SQL Server 資料庫中的會計分錄，ACCapp 將利用先進的 AI 技術來理解您的問題並提供相應的答案、數據洞察或圖表。
+**English:**
+This project is a Streamlit-based web application designed to modernize accounting data inquiry and financial reporting. It connects to an existing SQL Server database to provide users with interactive tools for querying journal vouchers, analyzing account balances, and generating key financial statements like the Income Statement. It also features an AI Assistant for natural language queries (details to be expanded).
 
-## 主要功能
+**中文:**
+本專案是一個基於 Streamlit 的 Web 應用程式，旨在實現會計數據查詢和財務報告的現代化。它連接到現有的 SQL Server 資料庫，為用戶提供互動式工具，用於查詢傳票、分析科目餘額以及生成關鍵財務報表（如損益表）。此外，它還包含一個用於自然語言查詢的 AI 助理（詳細功能待擴展）。
 
-*   **自然語言查詢 (NLP)**：直接用中文提問，無需編寫複雜的 SQL 查詢語句。
-*   **AI 驅動的數據分析**：利用 Google 先進的語言模型進行智能數據分析和查詢。
-*   **連接 SQL Server 資料庫**：直接從您的 SQL Server 資料庫中安全地獲取和分析最新的會計數據。
-*   **數據預覽**：在進行查詢前，可以預覽從資料庫加載的部分原始數據。
-*   **AI 生成代碼透明化**：查看由 AI 生成用以回答您問題的 Python/Pandas 代碼，增加操作的透明度。
-*   **數據可視化潛力**：AI 可以根據您的問題生成圖表，幫助您更直觀地理解數據趨勢 (例如，當 PandasAI 返回圖表時)。
-*   **安全的憑證管理**：通過 Streamlit 的 secrets 功能 (`secrets.toml`) 安全地管理您的 Google API 金鑰和資料庫連接訊息。
-*   **Streamlit 支持**：本應用基於 Streamlit 開發，界面簡潔易用。
+## Features Implemented (已實現功能)
 
-## 技術棧
+**English:**
+1.  **Journal Voucher Inquiry (傳票查詢):**
+    *   Filter journal vouchers by date range, account code, summary keyword, amount range, voucher number, preparer, and audit status.
+    *   Display query results in a sortable table.
+    *   Export query results to Excel.
+2.  **Account Balance Inquiry (科目餘額查詢):**
+    *   Query account balances for a selected company, account code (including parent accounts for consolidated balances), and date range.
+    *   Display Opening Balance, Total Debits, Total Credits, and Closing Balance.
+    *   Allows drill-down to view detailed transactions contributing to debit or credit totals for the period.
+3.  **Income Statement (損益表):**
+    *   Generate Income Statement for a selected company, year, and month.
+    *   Supports comparison with the same period last year (YoY %) and the previous month (MoM %).
+    *   Export the generated statement to Excel (with basic formulas for subtotals) and PDF.
+4.  **Balance Sheet (資產負債表):**
+    *   Generate Balance Sheet for a selected company as of a specific date.
+    *   Displays Assets, Liabilities, and Equity sections with totals.
+    *   Verifies the accounting equation (Total Assets = Total Liabilities + Equity).
+    *   Export the generated statement to Excel and PDF.
+5.  **Dashboard (營運儀表板):**
+    *   Provides an overview of key financial metrics for a selected company and date range.
+    *   Includes KPI cards (Period Revenue, Period Expenses, Period Net Profit, YTD Revenue).
+    *   Features charts: Monthly Revenue Trend (bar), Expense Structure (pie), Profit Margin Trend (line).
+6.  **AI Assistant (AI 助理):**
+    *   (Initial Setup) Provides a conversational interface for querying accounting data using natural language. Functionality is currently foundational and will be expanded.
 
-*   **Python**: 作為主要的開發語言。
-*   **Streamlit**: 用於構建交互式 Web 應用程式界面。
-*   **PandasAI**: 作為連接語言模型與 Pandas DataFrame 的核心組件，實現自然語言查詢功能。
-*   **Google Generative AI**: (例如 Gemini Pro) 提供底層的自然語言理解和生成能力。
-*   **SQLAlchemy & pyodbc**: 用於連接和操作 SQL Server 資料庫。
-*   **Pandas**: 用於高效的數據處理和分析。
+**中文:**
+1.  **傳票查詢 (Journal Voucher Inquiry):**
+    *   依據日期區間、會計科目、摘要關鍵字、金額範圍、傳票號碼、製單人及審核狀態篩選傳票。
+    *   以可排序的表格顯示查詢結果。
+    *   將查詢結果匯出至 Excel。
+2.  **科目餘額查詢 (Account Balance Inquiry):**
+    *   查詢選定公司、會計科目（包括父科目以顯示彙總餘額）及日期區間的科目餘額。
+    *   顯示期初餘額、期間借方總額、期間貸方總額及期末餘額。
+    *   允許點擊借方或貸方總額，以查看構成該期間總額的詳細交易記錄。
+3.  **損益表 (Income Statement):**
+    *   為選定公司、年份及月份生成損益表。
+    *   支援與去年同期比較 (YoY %) 及與上月比較 (MoM %)。
+    *   將生成的報表匯出至 Excel（包含小計的基本公式）和 PDF。
+4.  **資產負債表 (Balance Sheet):**
+    *   為選定公司生成特定截止日期的資產負債表。
+    *   顯示資產、負債和權益部分及其總計。
+    *   驗證會計方程式（資產總計 = 負債總計 + 權益總計）。
+    *   將生成的報表匯出至 Excel 和 PDF。
+5.  **營運儀表板 (Dashboard):**
+    *   提供選定公司和日期區間的關鍵財務指標概覽。
+    *   包含 KPI 卡片（本期收入、本期費用、本期淨利、年初至今收入）。
+    *   特色圖表：月度收入趨勢（長條圖）、費用結構（圓餅圖）、利潤率趨勢（折線圖）。
+6.  **AI 助理 (AI Assistant):**
+    *   (初期設置) 提供一個對話式介面，可用自然語言查詢會計數據。此功能目前為基礎階段，將持續擴展。
 
-## 設定與安裝
+## Technology Stack (技術棧)
 
-請按照以下步驟設定和安裝 ACCapp：
+*   **Python:** Core programming language.
+*   **Streamlit:** Web application framework.
+*   **Pandas:** Data manipulation and analysis.
+*   **SQLAlchemy:** Database toolkit (for connecting to SQL Server).
+*   **Openpyxl:** For reading/writing Excel files.
+*   **FPDF (fpdf2):** For generating PDF files.
+*   **SQL Server:** Backend database (assumed pre-existing).
 
-1.  **先決條件**:
-    *   確保您的系統已安裝 Python 3.7 或更高版本。
-    *   確保您的系統可以訪問 SQL Server 資料庫。
+## Setup and Installation (設置與安裝)
 
-2.  **克隆儲存庫 (可選)**:
-    如果您擁有本專案的 Git 儲存庫存取權限，可以將其克隆到您的本地電腦：
+**English:**
+1.  **Clone the repository:**
     ```bash
-    git clone <儲存庫URL>
-    cd ACCapp # 進入專案目錄
+    git clone <repository_url>
+    cd <repository_directory>
     ```
-    如果直接獲得源代碼文件，請解壓縮到您的工作目錄。
-
-3.  **創建並激活虛擬環境 (推薦)**:
+2.  **Create and activate a virtual environment (recommended):**
     ```bash
     python -m venv venv
-    # Windows
+    # On Windows
     venv\Scripts\activate
-    # macOS/Linux
+    # On macOS/Linux
     source venv/bin/activate
     ```
-
-4.  **安裝依賴套件**:
-    由於專案未包含 `requirements.txt` 文件，您需要手動安裝必要的套件。請運行以下命令：
+3.  **Install dependencies:**
     ```bash
-    pip install streamlit pandas pandasai google-generativeai pyodbc SQLAlchemy
+    pip install -r requirements.txt
     ```
-    *   `streamlit`: 用於運行 Web 應用。
-    *   `pandas`: 用於數據處理。
-    *   `pandasai`: 用於 AI 與數據的交互。
-    *   `google-generativeai`: Google AI 的客戶端庫。
-    *   `pyodbc`: 用於從 Python 連接到 SQL Server 的 ODBC 驅動程式。
-    *   `SQLAlchemy`: SQL 工具包和 ORM，用於與資料庫交互。
 
-## 配置
+**中文:**
+1.  **克隆代碼庫:**
+    ```bash
+    git clone <repository_url>
+    cd <repository_directory>
+    ```
+2.  **創建並激活虛擬環境 (建議):**
+    ```bash
+    python -m venv venv
+    # Windows 系統
+    venv\Scripts\activate
+    # macOS/Linux 系統
+    source venv/bin/activate
+    ```
+3.  **安裝依賴包:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-在運行應用程式之前，您需要配置您的 Google API 金鑰和 SQL Server 資料庫連接訊息。
+## Configuration (配置)
 
-1.  **創建 `secrets.toml` 文件**:
-    在您的專案根目錄下（與 `app` 和 `pages` 文件夾同級），創建一個名為 `.streamlit` 的文件夾（如果尚不存在）。然後，在 `.streamlit` 文件夾內創建一個名為 `secrets.toml` 的文件。
+**English:**
+Database connection details must be configured in a `secrets.toml` file located in the `.streamlit` directory within the project root.
 
-2.  **編輯 `secrets.toml` 文件**:
-    將以下內容複製到 `secrets.toml` 文件中，並用您的實際訊息替換佔位符：
+1.  Create a directory named `.streamlit` in the project root if it doesn't exist.
+2.  Inside `.streamlit`, create a file named `secrets.toml`.
+3.  Add your SQL Server connection details to `secrets.toml` as follows:
 
     ```toml
-    [google]
-    GOOGLE_API_KEY = "YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE"
-
     [database]
-    SERVER = "YOUR_SQL_SERVER_NAME_OR_IP_HERE" # 例如：localhost, SQLEXPRESS, 192.168.1.100, your_server.database.windows.net
-    DATABASE = "YOUR_DATABASE_NAME_HERE"
-    USERNAME = "YOUR_DB_USERNAME_HERE"
-    PASSWORD = "YOUR_DB_PASSWORD_HERE"
-    # DRIVER = "ODBC Driver 17 for SQL Server" # 可選，如果未指定，默認為 'ODBC Driver 17 for SQL Server'。根據您的系統和 SQL Server 版本可能需要更改。
+    db_type = "sqlserver" # Or other supported types if db_connector is adapted
+    db_username = "your_username"
+    db_password = "your_password"
+    db_host = "your_server_address" # e.g., localhost, server.example.com
+    db_port = "1433" # Default SQL Server port
+    db_name = "your_database_name"
+    # For SQL Server with pyodbc, you might need to specify the driver
+    # Ensure the driver is installed on your system, e.g., "ODBC Driver 17 for SQL Server"
+    db_driver = "ODBC Driver 17 for SQL Server"
     ```
 
-    **重要提示**:
-    *   將 `"YOUR_GOOGLE_AI_STUDIO_API_KEY_HERE"` 替換為您從 Google AI Studio 獲取的真實 API 金鑰。
-    *   將 `SERVER`, `DATABASE`, `USERNAME`, 和 `PASSWORD` 替換為您的 SQL Server 資料庫的實際連接訊息。
-    *   如果您的 SQL Server 需要特定的 ODBC 驅動程式，請取消註釋 `DRIVER` 行並指定正確的驅動程式名稱。常見的驅動程式包括 "ODBC Driver 17 for SQL Server", "ODBC Driver 18 for SQL Server", 或 "SQL Server Native Client 11.0"。
+**中文:**
+資料庫連接詳細資訊必須在位於專案根目錄 `.streamlit` 文件夾中的 `secrets.toml` 文件中進行配置。
 
-## 運行應用程式
+1.  如果專案根目錄中不存在 `.streamlit` 文件夾，請創建它。
+2.  在 `.streamlit` 文件夾內，創建一個名為 `secrets.toml` 的文件。
+3.  將您的 SQL Server 連接詳細資訊按以下格式添加到 `secrets.toml`：
 
-完成設定和配置後，您可以通過以下命令運行 Streamlit 應用程式：
+    ```toml
+    [database]
+    db_type = "sqlserver" # 如果 db_connector 被調整過，也可是其他支援的類型
+    db_username = "your_username"
+    db_password = "your_password"
+    db_host = "your_server_address" # 例如：localhost, server.example.com
+    db_port = "1433" # SQL Server 預設端口
+    db_name = "your_database_name"
+    # 對於使用 pyodbc 的 SQL Server，您可能需要指定驅動程式
+    # 請確保您的系統上已安裝該驅動程式，例如："ODBC Driver 17 for SQL Server"
+    db_driver = "ODBC Driver 17 for SQL Server"
+    ```
 
-```bash
-streamlit run pages/1_Chat_with_Data.py
-```
+## Running the Application (運行應用程式)
 
-應用程式應該會在您的默認 Web 瀏覽器中打開。
+**English:**
+Once the dependencies are installed and `secrets.toml` is configured:
+1.  Navigate to the root directory of the project in your terminal.
+2.  Run the Streamlit application:
+    ```bash
+    streamlit run Home.py
+    ```
+3.  The application should open in your default web browser.
 
-## 使用方法
+**中文:**
+依賴包安裝完成且 `secrets.toml` 配置妥當後：
+1.  在您的終端機中，導航到專案的根目錄。
+2.  運行 Streamlit 應用程式：
+    ```bash
+    streamlit run Home.py
+    ```
+3.  應用程式應在您的預設網頁瀏覽器中打開。
 
-1.  **啟動應用程式**：執行上述 `streamlit run` 命令。
-2.  **等待初始化**：應用程式啟動後，會嘗試初始化語言模型 (LLM) 和資料庫連接。您會在界面上看到相關的狀態消息。
-3.  **數據加載**：成功連接資料庫後，應用程式會自動從 `ASPDT`, `ASLIP`, 和 `AACNT` 表中加載最近的 5000 條已審核會計分錄。如果需要，您可以展開數據預覽部分查看加載的數據。
-4.  **提出問題**：在標有「例如: '總收入是多少?' 或 '按类别列出支出总额' 或 '哪个地区的收入最高?'」的文本輸入框中，用自然語言輸入您關於會計數據的問題。
-5.  **發送查詢**：點擊「發送查詢」按鈕。
-6.  **查看結果**：AI 會處理您的問題並查詢數據。結果將顯示在「AI 回答」部分，可能是文本、表格數據或圖表。
-7.  **查看 AI 生成的代碼 (可選)**：您可以展開「查看 AI 生成的代碼」部分，了解 AI 是如何理解您的問題並從數據中提取信息的。
+## Basic Usage (基本使用說明)
 
-請注意，如果 LLM 或資料庫連接配置不正確，或資料庫中沒有符合條件的數據，應用程式可能無法正常工作。請留意界面上的錯誤或警告信息。
+**English:**
+*   **Navigation:** Use the sidebar to select the desired module (AI Assistant, Journal Voucher Inquiry, Account Balance Inquiry, Income Statement, Balance Sheet, Dashboard).
+*   **Journal Voucher Inquiry:**
+    *   Set filters in the sidebar (date range is mandatory). Company filter might be applicable if data contains multiple companies but this page does not have a company selector.
+    *   Click "查詢傳票" (Query Vouchers) to view results.
+    *   Click "匯出 Excel" (Export Excel) to download the results.
+*   **Account Balance Inquiry:**
+    *   Select a company, date range, and an account code in the sidebar (all mandatory).
+    *   Click "查詢餘額" (Query Balance).
+    *   View balances and click "查看借方明細" (View Debit Details) or "查看貸方明細" (View Credit Details) for transaction drill-down.
+*   **Income Statement:**
+    *   Select a company, year, and month in the sidebar.
+    *   Optionally, check boxes for "與去年同期比較 (%)" (Compare with LY Same Period) or "與上月比較 (%)" (Compare with Last Month).
+    *   Click "生成報表" (Generate Report).
+    *   Use the "匯出 Excel" or "匯出 PDF" buttons to download the statement.
+*   **Balance Sheet:**
+    *   Select a company and an "as of" date in the sidebar.
+    *   Click "生成報表" (Generate Report).
+    *   Use the "匯出 Excel" or "匯出 PDF" buttons to download the statement.
+*   **Dashboard:**
+    *   Select a company and date range in the sidebar.
+    *   Click "刷新儀表板" (Refresh Dashboard) to load/update data.
+
+**中文:**
+*   **導覽:** 使用側邊欄選擇所需的功能模組（AI 助理、傳票查詢、科目餘額查詢、損益表、資產負債表、營運儀表板）。
+*   **傳票查詢:**
+    *   在側邊欄中設定篩選條件（日期區間為必填）。如果數據包含多家公司，此頁面目前無公司選擇器，可能顯示所有公司數據。
+    *   點擊「查詢傳票」按鈕查看結果。
+    *   點擊「匯出 Excel」按鈕下載結果。
+*   **科目餘額查詢:**
+    *   在側邊欄中選擇公司、日期區間和會計科目（三者皆為必填）。
+    *   點擊「查詢餘額」按鈕。
+    *   查看餘額數據，並可點擊「查看借方明細」或「查看貸方明細」以鑽取交易詳情。
+*   **損益表:**
+    *   在側邊欄中選擇公司、年份和月份。
+    *   可選中「與去年同期比較 (%)」或「與上月比較 (%)」的複選框。
+    *   點擊「生成報表」按鈕。
+    *   使用「匯出 Excel」或「匯出 PDF」按鈕下載報表。
+*   **資產負債表:**
+    *   在側邊欄中選擇公司和截止日期。
+    *   點擊「生成報表」按鈕。
+    *   使用「匯出 Excel」或「匯出 PDF」按鈕下載報表。
+*   **營運儀表板:**
+    *   在側邊欄中選擇公司和日期區間。
+    *   點擊「刷新儀表板」按鈕以加載/更新數據。

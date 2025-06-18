@@ -26,8 +26,10 @@ def get_db_engine():
             st.info("請參考您的 SQL Server Management Studio 連線資訊進行填寫。")
             return None
             
-        # 這是最常見的 SQL Server ODBC 驅動程式。請確保它已安裝在您的系統上。
-        driver = "{ODBC Driver 17 for SQL Server}"
+        # 從 secrets.toml 讀取驅動程式，如果未提供則使用預設值
+        driver_from_secrets = db_config.get("DB_DRIVER") # Match README example
+        driver = driver_from_secrets if driver_from_secrets else "{ODBC Driver 17 for SQL Server}"
+        st.info(f"使用的 ODBC 驅動程式: {driver}") # Inform user of driver being used
         
         conn_str_params = {
             "DRIVER": driver,
@@ -79,6 +81,6 @@ def get_db_engine():
         3.  如果您使用 SQL Server 驗證, 請確保 `USERNAME` 和 `PASSWORD` 正確。
         4.  執行此應用程式的電腦**網路**是否可以連上資料庫伺服器。
         5.  伺服器上的**防火牆**是否已允許此連線。
-        6.  系統的 **ODBC Driver 17 for SQL Server** 是否已正確安裝。
+        6.  系統的 **ODBC 驅動程式** (如 {ODBC Driver 17 for SQL Server}) 是否已正確安裝且與 `secrets.toml` 中的 `DB_DRIVER` (如果已設定) 相符。
         """)
         return None

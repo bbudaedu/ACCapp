@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from app.core.db_connector import get_db_engine
-from sqlalchemy import text, and_, or_ # Ensure 'and_' and 'or_' are imported for query building
+from sqlalchemy import text # Removed and_, or_ as they are not used
 import datetime
 import io # Required for Excel export
 import openpyxl # Explicitly import though pandas might handle it.

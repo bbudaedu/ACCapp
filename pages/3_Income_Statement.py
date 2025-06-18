@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from app.core.db_connector import get_db_engine
-from sqlalchemy import text
+from sqlalchemy import text # Removed func
 from calendar import monthrange
 import datetime
 import numpy as np # For abs and inf handling
@@ -28,6 +28,19 @@ if not db_engine:
     st.stop()
 
 # --- Helper function to fetch data ---
+@st.cache_data(ttl=3600) # Cache company data longer
+def fetch_company_data_is(): # Renamed to avoid conflict if running in same context as dashboard's
+    if not db_engine:
+        # This case should ideally be handled before calling, or db_engine passed as arg
+        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+    try:
+        with db_engine.connect() as connection:
+            df = pd.read_sql(text("SELECT CO_NO, CO_NAME FROM PCOMPANY ORDER BY CO_NO"), connection)
+            return df
+    except Exception as e:
+        st.error(f"獲取公司列表時發生錯誤 (損益表): {e}")
+        return pd.DataFrame(columns=['CO_NO', 'CO_NAME'])
+
 @st.cache_data(ttl=300)
 def execute_query(query, params=None):
     try:
@@ -54,7 +67,10 @@ IS_DISPLAY_ORDER = [
 ]
 CALCULATED_ITEMS = ["營業毛利 (Gross Profit)", "營業利益 (Operating Income)", "稅前淨利 (Pre-tax Income)"]
 
-def fetch_is_category_data_for_period(year, month):
+def fetch_is_category_data_for_period(year, month, company_no): # Added company_no
+    if not company_no:
+        st.sidebar.error("損益表錯誤：未選擇公司進行查詢。") # User feedback
+        return {} # Return empty dict if no company
     _, num_days = monthrange(year, month)
     start_date = datetime.date(year, month, 1).strftime('%Y%m%d')
     end_date = datetime.date(year, month, num_days).strftime('%Y%m%d')
@@ -67,15 +83,16 @@ def fetch_is_category_data_for_period(year, month):
         JOIN ASLIP h ON d.SD_NO = h.SP_NO AND d.SD_INDEX = h.SP_INDEX
         WHERE h.SP_CHECK = '1'
           AND d.SD_ATNO LIKE :acc_pattern
-          AND h.SP_DATE BETWEEN :start_date AND :end_date;
+          AND h.SP_DATE BETWEEN :start_date AND :end_date
+          AND h.SP_CO_NO = :company_no; -- Added company filter
         """
-        params = {'acc_pattern': acc_pattern, 'start_date': start_date, 'end_date': end_date}
+        params = {'acc_pattern': acc_pattern, 'start_date': start_date, 'end_date': end_date, 'company_no': company_no}
         df_amount = execute_query(query, params)
         amount = df_amount.iloc[0]['Amount'] if not df_amount.empty and 'Amount' in df_amount.columns else 0
         period_data[category_name] = amount
     return period_data
 
-def calculate_derived_is_items(period_data_map):
+def calculate_derived_is_items(period_data_map): # No change to this function itself
     revenue = period_data_map.get("營業收入 (Revenue)", 0)
     cogs = period_data_map.get("營業成本 (COGS)", 0)
     period_data_map["營業毛利 (Gross Profit)"] = revenue + cogs
@@ -249,50 +266,74 @@ def df_to_pdf(df, params):
     return pdf.output(dest='S').encode('latin-1') # S returns bytes
 
 
-# --- Filter Section --- (Same as before)
+# --- Filter Section ---
 st.sidebar.header("報表參數")
+
+# Company Selector for Income Statement
+companies_df_is = fetch_company_data_is()
+company_options_is = {row['CO_NO']: f"{row['CO_NO']} - {row['CO_NAME']}" for _, row in companies_df_is.iterrows()} if not companies_df_is.empty else {}
+selected_company_no_is = None
+selected_company_name_is = "無公司"
+
+if not company_options_is:
+    st.sidebar.warning("未找到任何公司資料 (損益表)。")
+    # Keep selected_company_no_is as None, button to generate report will be disabled or show error
+else:
+    default_company_no_is = list(company_options_is.keys())[0]
+    selected_company_no_is = st.sidebar.selectbox(
+        "公司 (Company)", options=list(company_options_is.keys()),
+        format_func=lambda x: company_options_is.get(x, "未知公司"),
+        key="is_company_no", index=0
+    )
+    selected_company_name_is = company_options_is.get(selected_company_no_is, "未知公司")
+
+
 current_year_today = datetime.date.today().year
 current_month_today = datetime.date.today().month
 years_list = list(range(current_year_today - 10, current_year_today + 1))
-selected_year = st.sidebar.selectbox("選擇年份", options=years_list, index=len(years_list)-1)
+selected_year = st.sidebar.selectbox("選擇年份", options=years_list, index=len(years_list)-1, key="is_year")
 months_list = list(range(1, 13))
 month_names_map = {m: datetime.date(2000, m, 1).strftime('%B') for m in months_list}
-selected_month = st.sidebar.selectbox("選擇月份", options=months_list, format_func=lambda m: f"{m:02d} ({month_names_map[m]})", index=current_month_today-1)
+selected_month = st.sidebar.selectbox("選擇月份", options=months_list, format_func=lambda m: f"{m:02d} ({month_names_map[m]})", index=current_month_today-1, key="is_month")
 st.sidebar.subheader("比較功能")
-compare_ly_cb = st.sidebar.checkbox("與去年同期比較 (%)", key="compare_ly")
-compare_lm_cb = st.sidebar.checkbox("與上月比較 (%)", key="compare_lm")
+compare_ly_cb = st.sidebar.checkbox("與去年同期比較 (%)", key="compare_ly_is")
+compare_lm_cb = st.sidebar.checkbox("與上月比較 (%)", key="compare_lm_is")
 
 # --- Session State ---
 if 'income_statement_final_df' not in st.session_state:
     st.session_state.income_statement_final_df = pd.DataFrame()
-if 'income_statement_raw_data_for_export' not in st.session_state: # To store unformatted numbers for export
+if 'income_statement_raw_data_for_export' not in st.session_state:
     st.session_state.income_statement_raw_data_for_export = pd.DataFrame()
 if 'income_statement_display_params' not in st.session_state:
     st.session_state.income_statement_display_params = None
 
 # --- Generate Report Button ---
-if st.sidebar.button("生成報表", type="primary"):
-    st.session_state.income_statement_display_params = {
-        "year": selected_year, "month": selected_month,
-        "compare_ly": compare_ly_cb, "compare_lm": compare_lm_cb
-    }
-    with st.spinner(f"正在生成 {selected_year} 年 {selected_month:02d} 月損益表..."):
-        current_data_raw_cats = fetch_is_category_data_for_period(selected_year, selected_month)
-        current_data_calculated = calculate_derived_is_items(current_data_raw_cats.copy()) # Use copy for safety
+if st.sidebar.button("生成報表", type="primary", key="is_generate_button"):
+    if not selected_company_no_is:
+        st.error("請選擇一個公司。") # Error if no company selected
+    else:
+        st.session_state.income_statement_display_params = {
+            "company_name": selected_company_name_is, "company_no": selected_company_no_is, # Store company info
+            "year": selected_year, "month": selected_month,
+            "compare_ly": compare_ly_cb, "compare_lm": compare_lm_cb
+        }
+        with st.spinner(f"正在為 {selected_company_name_is} 生成 {selected_year} 年 {selected_month:02d} 月損益表..."): # Updated spinner message
+            current_data_raw_cats = fetch_is_category_data_for_period(selected_year, selected_month, selected_company_no_is)
+            current_data_calculated = calculate_derived_is_items(current_data_raw_cats.copy())
 
-        ly_data_calculated, lm_data_calculated = None, None
-        ly_label_for_df, lm_label_for_df = None, None
-        ly_year, ly_month = selected_year - 1, selected_month
-        lm_year, lm_month = (selected_year, selected_month - 1) if selected_month > 1 else (selected_year - 1, 12)
+            ly_data_calculated, lm_data_calculated = None, None
+            ly_label_for_df, lm_label_for_df = None, None
+            ly_year, ly_month = selected_year - 1, selected_month
+            lm_year, lm_month = (selected_year, selected_month - 1) if selected_month > 1 else (selected_year - 1, 12)
 
-        if compare_ly_cb:
-            ly_label_for_df = f"金額 ({ly_year}/{ly_month:02d} LY)"
-            ly_data_raw_cats = fetch_is_category_data_for_period(ly_year, ly_month)
-            ly_data_calculated = calculate_derived_is_items(ly_data_raw_cats.copy())
-        if compare_lm_cb:
-            lm_label_for_df = f"金額 ({lm_year}/{lm_month:02d} LM)"
-            lm_data_raw_cats = fetch_is_category_data_for_period(lm_year, lm_month)
-            lm_data_calculated = calculate_derived_is_items(lm_data_raw_cats.copy())
+            if compare_ly_cb:
+                ly_label_for_df = f"金額 ({ly_year}/{ly_month:02d} LY)"
+                ly_data_raw_cats = fetch_is_category_data_for_period(ly_year, ly_month, selected_company_no_is)
+                ly_data_calculated = calculate_derived_is_items(ly_data_raw_cats.copy())
+            if compare_lm_cb:
+                lm_label_for_df = f"金額 ({lm_year}/{lm_month:02d} LM)"
+                lm_data_raw_cats = fetch_is_category_data_for_period(lm_year, lm_month, selected_company_no_is)
+                lm_data_calculated = calculate_derived_is_items(lm_data_raw_cats.copy())
 
         current_period_label_for_df = f"{selected_year}/{selected_month:02d} 金額"
 
@@ -321,29 +362,30 @@ if st.sidebar.button("生成報表", type="primary"):
 # --- Display Area for Income Statement ---
 if not st.session_state.income_statement_final_df.empty and st.session_state.income_statement_display_params:
     params = st.session_state.income_statement_display_params
-    st.subheader(f"{params['year']} 年 {params['month']:02d} 月 損益表")
+    # Display company name in the report title
+    st.subheader(f"{params.get('company_name', '')} - {params['year']} 年 {params['month']:02d} 月 損益表")
     st.dataframe(st.session_state.income_statement_final_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.subheader("匯出功能")
     col_export1, col_export2 = st.columns(2)
 
-    # Use the raw data df for Excel export to preserve numbers
     excel_data = df_to_excel_with_formulas(st.session_state.income_statement_raw_data_for_export, params)
     col_export1.download_button(
         label="📥 匯出 Excel", data=excel_data,
-        file_name=f"IncomeStatement_{params['year']}{params['month']:02d}.xlsx",
+        # Add company identifier to filename if available
+        file_name=f"IncomeStatement_{params.get('company_no','ALL')}_{params['year']}{params['month']:02d}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-    # Use the display df for PDF as it has formatted strings
     pdf_data = df_to_pdf(st.session_state.income_statement_final_df, params)
     col_export2.download_button(
         label="📄 匯出 PDF", data=pdf_data,
-        file_name=f"IncomeStatement_{params['year']}{params['month']:02d}.pdf",
+        # Add company identifier to filename if available
+        file_name=f"IncomeStatement_{params.get('company_no','ALL')}_{params['year']}{params['month']:02d}.pdf",
         mime="application/pdf"
     )
 else:
-    st.info("請在側邊欄選擇年份和月份後，點擊「生成報表」。")
+    st.info("請在側邊欄選擇公司、年份和月份後，點擊「生成報表」。") # Updated prompt
 
 st.sidebar.info("注意：會計科目範圍需與客戶確認。PDF匯出需要環境中包含支援中文的字型。")
