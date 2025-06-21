@@ -29,42 +29,62 @@ else:
     st.error("数据库引擎未能初始化。请检查您的数据库配置。")
 
 # --- 載入資料 ---
-df = None
-if db_engine:
+@st.cache_data(ttl=3600) # Cache data for 1 hour
+def load_accounting_data(_db_engine): # Pass engine as argument for caching
+    if not _db_engine:
+        return None
+
+    # Use a more specific name for the data, e.g., recent_transactions_df
+    # Corrected JOIN condition and ensure SP_INDEX and SD_INDEX are used if they are part of the key.
+    # Assuming ASLIP.SP_INDEX and ASPDT.SD_INDEX form part of the composite key with SP_NO/SD_NO.
     sql_query_str = """
     SELECT TOP 5000
-        ASLIP.SP_DATE, ASLIP.SP_NO, ASLIP.SP_CHECK, 
-        ASPDT.SD_ATNO, AACNT.AT_NAME, AACNT.AT_DCR AS ACC_DCR,
-        ASPDT.SD_AMT, ASPDT.SD_DOC, ASPDT.SD_DCR AS VOUCHER_DETAIL_SUMMARY,
-        ASLIP.SP_MKMAN
-    FROM ASPDT
-    INNER JOIN ASLIP ON ASPDT.SD_NO = ASLIP.SP_NO
-    INNER JOIN AACNT ON ASPDT.SD_ATNO = AACNT.AT_NO
-    WHERE ASLIP.SP_CHECK = 1
-    ORDER BY ASLIP.SP_DATE DESC, ASLIP.SP_NO DESC;
+        h.SP_DATE,
+        h.SP_NO,
+        h.SP_CHECK,
+        d.SD_ATNO,
+        a.AT_NAME,
+        a.AT_DCR AS ACC_DCR,
+        d.SD_AMT,
+        d.SD_DOC,
+        d.SD_DCR AS VOUCHER_DETAIL_SUMMARY,
+        h.SP_MKMAN
+    FROM ASPDT d
+    INNER JOIN ASLIP h ON d.SD_NO = h.SP_NO -- Removed d.SD_INDEX = h.SP_INDEX from join
+    INNER JOIN AACNT a ON d.SD_ATNO = a.AT_NO
+    WHERE h.SP_CHECK = '1'  -- Assuming '1' means approved/relevant
+    ORDER BY h.SP_DATE DESC, h.SP_NO DESC;
     """
     try:
-        with st.spinner("正在从数据库加载数据..."):
-            with db_engine.connect() as connection:
-                df = pd.read_sql(text(sql_query_str), connection)
+        with st.spinner("正在从数据库加载最新的会计分录 (最多5000条)..."): # More specific spinner
+            with _db_engine.connect() as connection:
+                dataframe = pd.read_sql(text(sql_query_str), connection)
         
-        if df.empty:
+        if dataframe.empty:
             st.warning("查询成功，但未从数据库返回数据。")
         else:
-            st.success(f"成功从数据库加载了 {len(df)} 条会计分录。")
-            with st.expander("查看数据预览", expanded=False):
-                st.dataframe(df.head(10))
+            st.success(f"成功从数据库加载了 {len(dataframe)} 条最新的会计分录。")
+            # Data preview is now inside the function, shown only once post-caching or on error.
+            # Consider moving preview outside if needed on every run with cached data.
+        return dataframe
     except Exception as e:
         st.error(f"从数据库加载数据时出错: {e}")
-        df = None
+        return None
+
+recent_transactions_df = load_accounting_data(db_engine)
+
+if recent_transactions_df is not None and not recent_transactions_df.empty:
+    with st.expander("查看数据预览 (View Data Preview)", expanded=False):
+        st.dataframe(recent_transactions_df.head(10))
 
 # --- 初始化 PandasAI Agent ---
 agent = None
-if llm and df is not None and not df.empty:
+if llm and recent_transactions_df is not None and not recent_transactions_df.empty:
     st.markdown("---")
     st.subheader("AI 数据分析助手")
     try:
-        agent = Agent(df, config={"llm": llm, "verbose": True})
+        # Pass the DataFrame to the agent
+        agent = Agent(recent_transactions_df, config={"llm": llm, "verbose": True, "handle_pandas_errors": True, "handle_verification_errors": True})
         st.success("AI 数据分析助手已准备就绪。")
     except Exception as e:
         st.error(f"初始化 PandasAI Agent 时出错: {e}")
